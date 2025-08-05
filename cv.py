@@ -5,16 +5,18 @@ import re
 import io
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import pipeline
 from docx import Document
 
 st.set_page_config(page_title="ATS Resume Optimizer", layout="centered")
 
+
 @st.cache_resource
 def load_paraphraser():
-    return pipeline("text2text-generation", model="mrm8488/t5-base-finetuned-question-generation-ap", tokenizer="t5-base")
+    return pipeline("text2text-generation", model="mrm8488/t5-base-finetuned-question-generation-ap")
 
 paraphraser = load_paraphraser()
+
 
 def read_resume(file):
     if file.name.endswith(".docx"):
@@ -43,7 +45,7 @@ def rewrite_experience(resume_text, keywords):
     rewritten = []
     for line in lines:
         if line.strip().startswith("-") or line.strip().startswith("\u2022"):
-            prompt = f"paraphrase: {line.strip()} Include: {' '.join(keywords[:3])}"
+            prompt = f"paraphrase: {line.strip()}. Include: {' '.join(keywords[:3])}"
             try:
                 out = paraphraser(prompt, max_length=60, num_return_sequences=1)
                 rewritten.append("\u2022 " + out[0]['generated_text'])
@@ -82,7 +84,7 @@ def score_keywords(resume_text, jd_keywords):
     return len(matches), matches
 
 
-st.title("🎯 ATS Resume Optimizer")
+st.title("🎯 ATS Resume Optimizer for Jobscan/VMock")
 st.markdown("Upload your resume and job description to generate a keyword-aligned, ATS-friendly version.")
 
 resume_file = st.file_uploader("📄 Upload Resume (PDF or DOCX)", type=["pdf", "docx"])
@@ -94,28 +96,24 @@ if submit:
         resume_text = read_resume(resume_file)
         jd_keywords = extract_keywords(jd_text)
 
-        # Sections
         new_summary = generate_summary(jd_keywords)
         improved_experience = rewrite_experience(resume_text, jd_keywords)
         new_skills = update_skills("SQL, Python, Power BI", jd_keywords)
 
-        
-        keyword_count, matched_keywords = score_keywords(resume_text, jd_keywords)
-        keyword_count_after, matched_keywords_after = score_keywords(new_summary + improved_experience + new_skills, jd_keywords)
+        keyword_count_before, matched_before = score_keywords(resume_text, jd_keywords)
+        keyword_count_after, matched_after = score_keywords(new_summary + improved_experience + new_skills, jd_keywords)
 
-      
-        new_doc = build_resume(new_summary, improved_experience, new_skills, resume_text)
+        final_doc = build_resume(new_summary, improved_experience, new_skills, resume_text)
         buffer = io.BytesIO()
-        new_doc.save(buffer)
+        final_doc.save(buffer)
         buffer.seek(0)
 
-       
         st.subheader("📊 ATS Match Simulation")
-        st.metric("Keyword Match Before", f"{keyword_count} / {len(jd_keywords)}")
-        st.metric("Keyword Match After", f"{keyword_count_after} / {len(jd_keywords)}")
+        st.metric("Match Before", f"{keyword_count_before} / {len(jd_keywords)}")
+        st.metric("Match After", f"{keyword_count_after} / {len(jd_keywords)}")
 
-        st.subheader("✅ Keywords Matched After Optimization")
-        st.markdown(", ".join(matched_keywords_after))
+        st.subheader("✅ Keywords Matched After")
+        st.markdown(", ".join(matched_after))
 
         st.download_button("📥 Download Optimized Resume", buffer, file_name="ATS_Optimized_Resume.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     else:
