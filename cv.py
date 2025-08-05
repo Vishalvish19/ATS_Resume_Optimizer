@@ -5,14 +5,14 @@ import re
 import io
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from transformers import pipeline
+from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 from docx import Document
 
 st.set_page_config(page_title="ATS Resume Optimizer", layout="centered")
 
 @st.cache_resource
 def load_paraphraser():
-    return pipeline("text2text-generation", model="Vamsi/T5_Paraphrase_Paws")
+    return pipeline("text2text-generation", model="mrm8488/t5-base-finetuned-question-generation-ap", tokenizer="t5-base")
 
 paraphraser = load_paraphraser()
 
