@@ -3,5 +3,4 @@ docx2txt
 PyPDF2
 python-docx
 transformers==4.30.2
-sentencepiece
 scikit-learn
