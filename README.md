@@ -12,5 +12,5 @@ This Streamlit app helps job seekers rewrite and optimize their resume to improv
 ## How to Run Locally
 
 ```bash
-pip install -r requirements.txt
-streamlit run ats_resume_optimizer.py
+pip install -r requirement.txt
+streamlit run cv.py
