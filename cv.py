@@ -4,18 +4,9 @@ import PyPDF2
 import re
 import io
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from transformers import pipeline
 from docx import Document
 
 st.set_page_config(page_title="ATS Resume Optimizer", layout="centered")
-
-
-@st.cache_resource
-def load_paraphraser():
-    return pipeline("text2text-generation", model="mrm8488/t5-base-finetuned-question-generation-ap")
-
-paraphraser = load_paraphraser()
 
 
 def read_resume(file):
@@ -38,38 +29,20 @@ def extract_keywords(jd_text, top_n=15):
     return [word for word, freq in sorted_words[:top_n]]
 
 def generate_summary(keywords):
-    return f"Data Analyst with expertise in {', '.join(keywords[:5])}. Proven ability to drive insights using tools like {', '.join(keywords[5:8])}. Strong communication and cross-functional collaboration."
-
-def rewrite_experience(resume_text, keywords):
-    lines = resume_text.splitlines()
-    rewritten = []
-    for line in lines:
-        if line.strip().startswith("-") or line.strip().startswith("\u2022"):
-            prompt = f"paraphrase: {line.strip()}. Include: {' '.join(keywords[:3])}"
-            try:
-                out = paraphraser(prompt, max_length=60, num_return_sequences=1)
-                rewritten.append("\u2022 " + out[0]['generated_text'])
-            except:
-                rewritten.append(line)
-        else:
-            rewritten.append(line)
-    return "\n".join(rewritten)
+    return f"Experienced with proven ability in {', '.join(keywords[:5])}. Skilled in {', '.join(keywords[5:8])}. Passionate about delivering insights and driving business value."
 
 def update_skills(existing_skills, keywords):
     existing = set(map(str.lower, re.findall(r"\b\w+\b", existing_skills)))
     added = [kw for kw in keywords if kw.lower() not in existing]
     return existing_skills + ", " + ", ".join(added) if added else existing_skills
 
-def build_resume(summary, experience, skills, original_text):
+def build_resume(summary, skills, original_text):
     doc = Document()
     doc.add_heading("Summary", level=1)
     doc.add_paragraph(summary)
     doc.add_heading("Professional Experience", level=1)
-    for line in experience.splitlines():
-        if line.strip().startswith("\u2022"):
-            doc.add_paragraph(line.strip(), style='List Bullet')
-        else:
-            doc.add_paragraph(line.strip())
+    for line in original_text.splitlines():
+        doc.add_paragraph(line.strip())
     doc.add_heading("Skills", level=1)
     doc.add_paragraph(skills)
     doc.add_heading("Education", level=1)
@@ -83,9 +56,8 @@ def score_keywords(resume_text, jd_keywords):
     matches = [kw for kw in jd_keywords if kw.lower() in resume_words]
     return len(matches), matches
 
-
-st.title("🎯 ATS Resume Optimizer for Jobscan/VMock")
-st.markdown("Upload your resume and job description to generate a keyword-aligned, ATS-friendly version.")
+st.title("🎯 ATS Resume Optimizer")
+st.markdown("Upload your resume and job description to generate an ATS-friendly version with enhanced keywords.")
 
 resume_file = st.file_uploader("📄 Upload Resume (PDF or DOCX)", type=["pdf", "docx"])
 jd_text = st.text_area("✏️ Paste the Job Description", height=300)
@@ -97,20 +69,22 @@ if submit:
         jd_keywords = extract_keywords(jd_text)
 
         new_summary = generate_summary(jd_keywords)
-        improved_experience = rewrite_experience(resume_text, jd_keywords)
         new_skills = update_skills("SQL, Python, Power BI", jd_keywords)
 
         keyword_count_before, matched_before = score_keywords(resume_text, jd_keywords)
-        keyword_count_after, matched_after = score_keywords(new_summary + improved_experience + new_skills, jd_keywords)
+        keyword_count_after, matched_after = score_keywords(new_summary + new_skills + resume_text, jd_keywords)
 
-        final_doc = build_resume(new_summary, improved_experience, new_skills, resume_text)
+        resume_score = (keyword_count_after / len(jd_keywords)) * 100
+        bar_color = "🟩" if resume_score >= 80 else ("🟨" if resume_score >= 50 else "🟥")
+
+        final_doc = build_resume(new_summary, new_skills, resume_text)
         buffer = io.BytesIO()
         final_doc.save(buffer)
         buffer.seek(0)
 
-        st.subheader("📊 ATS Match Simulation")
-        st.metric("Match Before", f"{keyword_count_before} / {len(jd_keywords)}")
-        st.metric("Match After", f"{keyword_count_after} / {len(jd_keywords)}")
+        st.subheader("📊 Resume Score (Keyword Match)")
+        st.markdown(f"{bar_color} **Score:** {resume_score:.1f}% match with the job description.")
+        st.progress(resume_score / 100)
 
         st.subheader("✅ Keywords Matched After")
         st.markdown(", ".join(matched_after))
